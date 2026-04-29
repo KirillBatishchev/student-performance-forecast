@@ -42,6 +42,7 @@ htmlcov/
 nosetests.xml
 coverage.xml
 *.cover
+*.gitkeep
 
 # Translations
 *.mo
@@ -76,9 +77,8 @@ target/
 .ipynb_checkpoints/
 
 # exclude data from source control by default
-/data/**
-!/data/**/*.dvc
-!/data/**/.gitignore
+data/**/*.csv
+data/**/*.parquet
 
 # Mac OS-specific storage files
 .DS_Store
