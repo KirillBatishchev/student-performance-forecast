@@ -1,0 +1,5 @@
+outs:
+- md5: c3e207d04020669accbf1acd481429f3
+  size: 25519
+  hash: md5
+  path: lectures.csv
