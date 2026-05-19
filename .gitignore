@@ -5,6 +5,18 @@ __pycache__/
 # C extensions
 *.so
 
+# MLflow
+mlruns/
+mlartifacts/
+mlflow.db
+
+# Веса моделей
+weights/
+*.pth
+*.pt
+*.h5
+*.pb
+
 # Distribution / packaging
 .Python
 env/
@@ -75,6 +87,7 @@ target/
 
 # Jupyter NB Checkpoints
 .ipynb_checkpoints/
+notebooks/checking_model.ipynb
 
 # exclude data from source control by default
 data/**/*.csv
