@@ -1,6 +1,0 @@
-outs:
-- md5: b60158dff871ae4e21693947787f4af7.dir
-  size: 42561588
-  nfiles: 1185
-  hash: md5
-  path: raw_test
