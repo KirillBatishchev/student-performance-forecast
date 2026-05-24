@@ -1,5 +1,5 @@
 [core]
-    remote = storage
-['remote "storage"']
-    url = gdrive://1tyOhcbB4OfFM6ZtcyBP5oZfSHkbdG0_U
-    gdrive_use_service_account = false
+    remote = s3_mlops
+['remote "s3_mlops"']
+    url = s3://ednet-k3/processed/dvc_data
+    endpointurl = http://130.49.153.56:9000
