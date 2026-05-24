@@ -86,6 +86,7 @@ data/processed/
 data/raw/EdNET_KT3
 data/raw/EdNET-Contents
 data/raw/raw_train
+data/raw/raw_test
 
 # Mac OS-specific storage files
 .DS_Store
