@@ -1,5 +1,5 @@
 [core]
     remote = s3_mlops
 ['remote "s3_mlops"']
-    url = s3://ednet-k3/processed/dvc_data
+    url = s3://student-performance-forecast/dvc-store
     endpointurl = http://130.49.153.56:9000

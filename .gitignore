@@ -82,11 +82,12 @@ mlflow/**
 
 # exclude data from source control by default
 data/external/**
-data/processed/
+data/interim/EdNET_KT3_selection/
+data/processed/EdNET_KT3/
 data/raw/EdNET_KT3
-data/raw/EdNET-Contents
 data/raw/raw_train
 data/raw/raw_test
+data/raw/trained_users.json
 
 # Mac OS-specific storage files
 .DS_Store
@@ -97,3 +98,6 @@ data/raw/raw_test
 
 # Mypy cache
 .mypy_cache/
+
+# Secrets files
+/secrets
