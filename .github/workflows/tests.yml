@@ -1,0 +1,27 @@
+name: Tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    name: pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          pip install pytest
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install pandas numpy minio python-dotenv
+
+      - name: Run tests
+        run: pytest tests/ -v
