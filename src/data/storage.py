@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import json
 import torch
 import pandas as pd
@@ -6,7 +7,9 @@ from io import BytesIO
 from minio import Minio
 from dotenv import load_dotenv
 
-load_dotenv("secrets/.env")
+env_path = Path(__file__).resolve().parent.parent.parent / "secrets" / ".env"
+if env_path.exists():
+    load_dotenv(env_path)
 
 client = Minio(
     endpoint=os.getenv("MINIO_ENDPOINT"),
@@ -25,8 +28,8 @@ def list_files(prefix: str = "") -> list:
 
 
 def get_all_users() -> list:
-    """Все user_id из raw/"""
-    files = list_files("raw/")
+    """Все user_id из raw/users_logs"""
+    files = list_files("raw/users_logs")
     return [
         f.split("/")[-1].replace(".csv", "")
         for f in files
@@ -36,7 +39,7 @@ def get_all_users() -> list:
 
 def unseen_users(trained_users_file: dict, all_users: list):
     seen = set(
-        trained_users_file["trained_users"] | trained_users_file["valid_users"]
+        trained_users_file["trained_users"]) | set(trained_users_file["valid_users"]
     )
     all = set(all_users)
     unseen = list(all - seen)
@@ -59,7 +62,7 @@ def load_json(path: str) -> dict:
 def initial_model():
     """Загрузка данных для инициализации модели"""
     weights_path = "model_weights/initial_weights.pth"
-    params_path = "model_weights/initial_model_config.json"
+    params_path = "model_weights/initial_parameters.json"
     response_weights = client.get_object(BUCKET, weights_path)
     response_params = client.get_object(BUCKET, params_path)
     weights = torch.load(BytesIO(response_weights.data), map_location="cpu")
