@@ -154,14 +154,10 @@ def Transformation_data(df: pd.DataFrame, correct_dict: dict) -> pd.DataFrame:
             n_questions = bundle_responds["item_id"].nunique()
             n_attempts = len(bundle_responds)
 
-            for qid, group in bundle_responds.groupby("item_id"):
-                group_sorted = group.sort_values("timestamp")
-                last_answer = group_sorted.iloc[-1]["user_answer"]
+        last_answers = bundle_responds.sort_values('timestamp').groupby('item_id')['user_answer'].last()
+        n_correct = sum(last_answers == last_answers.index.map(correct_dict.get))
 
-                if last_answer == correct_dict.get(qid, ""):
-                    n_correct += 1
-
-            accuracy = n_correct / n_questions if n_questions > 0 else 0
+        accuracy = n_correct / n_questions if n_questions > 0 else 0
 
         # Time (sin/cos)
         dt = pd.to_datetime(submit_time, unit="ms")
@@ -185,7 +181,7 @@ def Transformation_data(df: pd.DataFrame, correct_dict: dict) -> pd.DataFrame:
         else:
             prev_submit = bundles.iloc[idx - 1]["submit_time"]
             time_since_last = (submit_time - prev_submit) / 1000 / 60
-            time_since_last = max(0, min(time_since_last, 240))
+            time_since_last = max(0, min(time_since_last, 10))
 
         # Moving average accuracy
         accuracy_history.append(accuracy)

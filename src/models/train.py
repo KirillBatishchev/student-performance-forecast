@@ -1,5 +1,8 @@
 import mlflow
-import numpy as np
+from pathlib import Path
+import os
+from dotenv import load_dotenv
+import json
 import random
 import torch
 import torch.nn as nn
@@ -9,6 +12,15 @@ import data.storage as st
 import models.model as Model
 import features.build_features as bs
 
+env_path = Path(__file__).resolve().parent.parent.parent / "secrets" / ".env"
+if env_path.exists():
+    load_dotenv(env_path)
+
+os.environ["MLFLOW_S3_ENDPOINT_URL"] = "http://130.49.153.56:9000"
+os.environ["AWS_ACCESS_KEY_ID"] = os.getenv("MINIO_ROOT_USER")
+os.environ["AWS_SECRET_ACCESS_KEY"] = os.getenv("MINIO_ROOT_PASSWORD")
+os.environ["MLFLOW_S3_IGNORE_TLS"] = "true"
+os.environ["MLFLOW_S3_VERIFY_SSL"] = "false"
 
 def prepare_data(user_ids, params, correct_dict):
     sequences = []
@@ -17,17 +29,16 @@ def prepare_data(user_ids, params, correct_dict):
         raw_df = st.load_csv(f"raw/users_logs/{user_id}.csv")
         processed_df = bs.Transformation_data(raw_df, correct_dict)
         sequences.append(processed_df)
-
-    all_values = np.vstack(
-        [seq[params["feature_cols"]].values for seq in sequences]
-    )
-    means = all_values.mean(axis=0)
-    stds = all_values.std(axis=0)
-    stds[stds == 0] = 1
+        
+    means = params["normalization"]["means"]
+    stds = params["normalization"]["stds"]
+    feature_cols = params["data"]["feature_cols"]
+    target_col = params["data"]["target_col"]
+    max_len=params["data"]["max_len"]
 
     for seq in sequences:
-        seq[params["feature_cols"]] = (
-            seq[params["feature_cols"]].values - means
+        seq[feature_cols] = (
+            seq[feature_cols].values - means
         ) / stds
 
     split_idx = int(len(sequences) * 0.8)
@@ -40,16 +51,16 @@ def prepare_data(user_ids, params, correct_dict):
 
     train_dataset = Model.DKTSequenceDataset(
         sequences=train_seq,
-        feature_cols=params["feature_cols"],
-        target_col=params["target_col"],
-        max_len=params["max_len"],
+        feature_cols=feature_cols,
+        target_col=target_col,
+        max_len=max_len,
     )
 
     valid_dataset = Model.DKTSequenceDataset(
         sequences=valid_seq,
-        feature_cols=params["feature_cols"],
-        target_col=params["target_col"],
-        max_len=params["max_len"],
+        feature_cols=feature_cols,
+        target_col=target_col,
+        max_len=max_len,
     )
 
     train_dataloader = DataLoader(train_dataset, batch_size=8, shuffle=True)
@@ -59,12 +70,12 @@ def prepare_data(user_ids, params, correct_dict):
 
 
 def train_core(model, params, train_loader, valid_loader):
-    optimizer = torch.optim.AdamW(model.parameters(), lr=params["lr"])
+    optimizer = torch.optim.AdamW(model.parameters(), lr=params["training"]["lr"])
     scheduler = CyclicLR(
         optimizer,
-        base_lr=params["lr"],
-        max_lr=params["lr_max"],
-        step_size_up=params["lr_step"],
+        base_lr=params["training"]["lr"],
+        max_lr=params["training"]["max_lr"],
+        step_size_up=params["training"]["lr_step"],
     )
     criterion = nn.BCELoss()
 
@@ -75,17 +86,17 @@ def train_core(model, params, train_loader, valid_loader):
 
     mlflow.log_params(
         {
-            "lr": params["lr"],
-            "lr_max": params["lr_max"],
-            "lr_step": params["lr_step"],
-            "epochs": params["epochs"],
-            "batch_size": params.get("batch_size", 32),
-            "optimizer": "AdamW",
-            "scheduler": "CyclicLR",
+            "lr": params["training"]["lr"],
+            "lr_max": params["training"]["max_lr"],
+            "lr_step": params["training"]["lr_step"],
+            "epochs": params["training"]["epochs"],
+            "batch_size": params["training"].get("batch_size", 32),
+            "optimizer": params["training"]["optimizer"],
+            "scheduler": params["training"]["scheduler"],
         }
     )
 
-    for epoch in range(params["epochs"]):
+    for epoch in range(params["training"]["epochs"]):
         # Train
         model.train()
         train_loss = 0
@@ -190,9 +201,6 @@ def train_core(model, params, train_loader, valid_loader):
                     avg_val_precision = val_precision / len(valid_loader)
                     avg_val_recall = val_recall / len(valid_loader)
 
-        avg_val_loss = val_loss / len(valid_loader)
-        avg_val_acc = val_acc / val_count if val_count > 0 else 0
-
         mlflow.log_metrics(
             {
                 "train_loss": avg_train_loss,
@@ -234,26 +242,40 @@ def freeze_for_finetune(model):
 
 
 def run_training(mode="train", model=None):
-    mlflow.set_tracking_uri("http://130.49.153.56:5000")
+    mlflow.set_tracking_uri("http://130.49.153.56:5001")
     questions_df = st.load_csv("raw/contents/questions.csv")
     correct_dict = dict(
         zip(questions_df["question_id"], questions_df["correct_answer"])
     )
-
+    
+    initial = st.initial_model()
+    params = initial["parameters"]
     if mode == "train":
-        initial = st.initial_model()
-        params = initial["parameters"]
         model = Model.SimpleDKT(
-            len(params["feature_cols"]),
-            params["hidden_dim"],
-            params["num_layers"],
-            params["n_heads"],
-            params["dropout"],
+            len(params["data"]["feature_cols"]),
+            params["architecture"]["hidden_dim"],
+            params["architecture"]["num_layers"],
+            params["architecture"]["n_heads"],
+            params["architecture"]["dropout"],
         )
         model.load_state_dict(initial["weights"])
     else:
-        params = st.load_json("model_weights/initial_model_config.json")
-        model = mlflow.pytorch.load_model("models:/SimpleDKT/latest")
+        client = mlflow.tracking.MlflowClient()
+        
+        runs = client.search_runs(
+            experiment_ids=["0"],
+            order_by=["start_time DESC"],
+            max_results=1
+        )
+        
+        if not runs:
+            raise Exception("No runs found for finetune")
+        
+        latest_run = runs[0]
+        run_id = latest_run.info.run_id
+        
+        # Загружаем модель из артефактов run
+        model = mlflow.pytorch.load_model(f"runs:/{run_id}/model")
 
     all_users = st.get_all_users()
     seen_users = st.load_json("raw/trained_users.json")
@@ -279,10 +301,46 @@ def run_training(mode="train", model=None):
         freeze_for_finetune(model)
 
     with mlflow.start_run(run_name=mode):
+        mlflow.log_params({
+        "input_dim": params["architecture"]["input_dim"],
+        "hidden_dim": params["architecture"]["hidden_dim"],
+        "num_layers": params["architecture"]["num_layers"],
+        "n_heads": params["architecture"]["n_heads"],
+        "dropout": params["architecture"]["dropout"],
+        
+        "lr": params["training"]["lr"],
+        "max_lr": params["training"]["max_lr"],
+        "epochs": params["training"]["epochs"],
+        "batch_size": params["training"]["batch_size"],
+        "optimizer": params["training"]["optimizer"],
+        
+        "max_len": params["data"]["max_len"],
+        })
+
+        mlflow.log_param("feature_cols", json.dumps(params["data"]["feature_cols"]))
+        mlflow.log_param("normalization_means", json.dumps(params["normalization"]["means"]))
+        mlflow.log_param("normalization_stds", json.dumps(params["normalization"]["stds"]))
+    
         model = train_core(model, params, train_loader, valid_loader)
-        mlflow.pytorch.log_model(
-            model, "model", registered_model_name="SimpleDKT"
-        )
+        
+        if mode == "train":
+            mlflow.pytorch.log_model(
+                pytorch_model=model,
+                artifact_path="model",
+                registered_model_name="SimpleDKT"
+            )
+        elif mode == "finetune":
+            run_id = mlflow.active_run().info.run_id
+            
+            versions = client.search_model_versions("name='SimpleDKT'")
+            next_version = len(versions) + 1
+            
+            client.create_model_version(
+                name="SimpleDKT",
+                source=f"runs:/{run_id}/model",
+                run_id=run_id,
+            )
+    
 
     return model
 
@@ -292,4 +350,7 @@ def train():
 
 
 def finetune():
+    
     return run_training(mode="finetune")
+
+
