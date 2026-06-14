@@ -46,15 +46,15 @@ jobs:
         with:
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:latest
-            ghcr.io/${{ github.repository }}:${{ github.sha }}
+            ghcr.io/kirillbatishchev/student-performance-forecast:latest
+            ghcr.io/kirillbatishchev/student-performance-forecast:${{ github.sha }}
           cache-from: type=registry,ref=ghcr.io/${{ github.repository }}:buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository }}:buildcache,mode=max
 
       - name: Update k8s manifest
         run: |
           sed -i \
-          "s|image: ghcr.io/${{ github.repository }}:.*|image: ghcr.io/${{ github.repository }}:${{ github.sha }}|" \
+          "s|image: ghcr.io/kirillbatishchev/student-performance-forecast:.*|image: ghcr.io/kirillbatishchev/student-performance-forecast:${{ github.sha }}|" \
           k8s/deployment.yaml
 
       - name: Commit updated manifest
