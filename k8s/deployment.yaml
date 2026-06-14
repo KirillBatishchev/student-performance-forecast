@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: student-performance-forecast
+  labels:
+    app: student-performance-forecast
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: student-performance-forecast
+  template:
+    metadata:
+      labels:
+        app: student-performance-forecast
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: mlops_model
+          image: ghcr.io/kirillbatishchev/student-performance-forecast:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: MLFLOW_TRACKING_URI
+              valueFrom:
+                secretKeyRef:
+                  name: mlops-secrets
+                  key: mlflow-tracking-uri
+            - name: MLFLOW_S3_ENDPOINT_URL
+              valueFrom:
+                secretKeyRef:
+                  name: mlops-secrets
+                  key: mlflow-s3-endpoint-url
+            - name: MINIO_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: mlops-secrets
+                  key: minio-endpoint
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: mlops-secrets
+                  key: minio-root-user
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mlops-secrets
+                  key: minio-root-password
+            - name: MINIO_BUCKET
+              valueFrom:
+                secretKeyRef:
+                  name: mlops-secrets
+                  key: minio-bucket
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "1000m"
+            limits:
+              memory: "3Gi"
+              cpu: "2000m"
