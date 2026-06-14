@@ -154,8 +154,16 @@ def Transformation_data(df: pd.DataFrame, correct_dict: dict) -> pd.DataFrame:
             n_questions = bundle_responds["item_id"].nunique()
             n_attempts = len(bundle_responds)
 
-        last_answers = bundle_responds.sort_values('timestamp').groupby('item_id')['user_answer'].last()
-        n_correct = sum(last_answers == last_answers.index.map(correct_dict.get))
+        last_answers = (
+            bundle_responds
+            .sort_values('timestamp')
+            .groupby('item_id')['user_answer']
+            .last()
+        )
+
+        n_correct = sum(
+            last_answers == last_answers.index.map(
+                correct_dict.get))
 
         accuracy = n_correct / n_questions if n_questions > 0 else 0
 
@@ -188,7 +196,7 @@ def Transformation_data(df: pd.DataFrame, correct_dict: dict) -> pd.DataFrame:
 
         if len(accuracy_history) >= 2:
             ma3 = np.mean(
-                accuracy_history[-min(3, len(accuracy_history) - 1) : -1]
+                accuracy_history[-min(3, len(accuracy_history) - 1): -1]
             )
         else:
             ma3 = 0

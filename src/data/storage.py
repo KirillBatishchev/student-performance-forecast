@@ -39,8 +39,8 @@ def get_all_users() -> list:
 
 def unseen_users(trained_users_file: dict, all_users: list):
     seen = set(
-        trained_users_file["trained_users"]) | set(trained_users_file["valid_users"]
-    )
+        trained_users_file["trained_users"]) | set(
+        trained_users_file["valid_users"])
     all = set(all_users)
     unseen = list(all - seen)
     return unseen

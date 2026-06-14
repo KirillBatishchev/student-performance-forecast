@@ -1,3 +1,8 @@
+from models.predict import predict
+from models.train import train, finetune
+import mlflow
+from pydantic import BaseModel, Field
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 import sys
 import os
 import uuid
@@ -8,13 +13,6 @@ from contextlib import asynccontextmanager
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
-from pydantic import BaseModel, Field
-
-import mlflow
-import data.storage as st
-from models.train import train, finetune
-from models.predict import predict
 
 # settings
 
@@ -30,8 +28,11 @@ logger = logging.getLogger("api")
 
 # PYDANTIC МОДЕЛИ
 
+
 class PredictRequest(BaseModel):
-    user_ids: List[str] = Field(..., min_items=1, description="Список ID пользователей")
+    user_ids: List[str] = Field(..., min_items=1,
+                                description="Список ID пользователей")
+
 
 class PredictResponse(BaseModel):
     status: str
@@ -39,12 +40,14 @@ class PredictResponse(BaseModel):
     predictions: list
     timestamp: str
 
+
 class RetrainResponse(BaseModel):
     status: str
     job_id: str
     message: str
 
 # FASTAPI
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -56,16 +59,18 @@ app = FastAPI(title="MLOps API", lifespan=lifespan)
 
 # endpoints
 
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
 
 @app.post("/predict", response_model=PredictResponse)
 async def predict_endpoint(request: PredictRequest):
     """Предсказание для списка пользователей"""
     request_id = str(uuid.uuid4())[:8]
     logger.info(f"[{request_id}] Predict: {request.user_ids}")
-    
+
     try:
         results = predict(request.user_ids)
         return PredictResponse(
@@ -78,26 +83,28 @@ async def predict_endpoint(request: PredictRequest):
         logger.error(f"[{request_id}] Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/retrain", response_model=RetrainResponse)
 async def retrain_endpoint(background_tasks: BackgroundTasks):
     """Запуск дообучения"""
     job_id = str(uuid.uuid4())[:8]
     logger.info(f"[{job_id}] Retrain started")
-    
+
     def run():
         try:
             result = finetune()
             logger.info(f"[{job_id}] Retrain completed: {result}")
         except Exception as e:
             logger.error(f"[{job_id}] Retrain failed: {e}")
-    
+
     background_tasks.add_task(run)
-    
+
     return RetrainResponse(
         status="started",
         job_id=job_id,
         message="Retraining started"
     )
+
 
 @app.post("/train")
 async def train_endpoint():
