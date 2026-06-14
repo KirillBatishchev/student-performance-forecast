@@ -19,8 +19,8 @@ class DKTSequenceDataset(Dataset):
         X = df[self.feature_cols].values
         y = df[self.target_col].values
         if len(X) > self.max_len:
-            X = X[-self.max_len :]
-            y = y[-self.max_len :]
+            X = X[-self.max_len:]
+            y = y[-self.max_len:]
 
         seq_len = len(X)
 
