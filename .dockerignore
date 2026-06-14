@@ -20,4 +20,10 @@ __pycache__
 *.log
 *.pt
 results/
-logs/
+logs/secrets/
+notebooks/
+tests/
+data/
+reports/
+docs/
+references/
