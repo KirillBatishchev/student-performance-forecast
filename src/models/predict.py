@@ -9,15 +9,18 @@ import torch
 import os
 import sys
 sys.path.insert(0, "src")
+from pathlib import Path
+from dotenv import load_dotenv
 
+env_path = Path(__file__).resolve().parent.parent.parent / "secrets" / ".env"
+load_dotenv(env_path)
 
-# Настройка
-os.environ["MLFLOW_S3_ENDPOINT_URL"] = "http://130.49.153.56:9000"
-os.environ["AWS_ACCESS_KEY_ID"] = "minio_admin"
-os.environ["AWS_SECRET_ACCESS_KEY"] = "MinioSecretPassword123"
-os.environ["MLFLOW_S3_IGNORE_TLS"] = "true"
+os.environ["MLFLOW_S3_ENDPOINT_URL"] = os.getenv("MLFLOW_S3_ENDPOINT_URL", "")
+os.environ["AWS_ACCESS_KEY_ID"] = os.getenv("MINIO_ROOT_USER", "")
+os.environ["AWS_SECRET_ACCESS_KEY"] = os.getenv("MINIO_ROOT_PASSWORD", "")
+os.environ["MLFLOW_S3_IGNORE_TLS"] = os.getenv("MLFLOW_S3_IGNORE_TLS", "true")
 
-mlflow.set_tracking_uri("http://130.49.153.56:5001")
+mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", ""))
 
 
 def load_model():
