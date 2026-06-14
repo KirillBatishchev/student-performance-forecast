@@ -8,9 +8,9 @@ import numpy as np
 import torch
 import os
 import sys
-sys.path.insert(0, "src")
 from pathlib import Path
 from dotenv import load_dotenv
+sys.path.insert(0, "src")
 
 env_path = Path(__file__).resolve().parent.parent.parent / "secrets" / ".env"
 load_dotenv(env_path)
