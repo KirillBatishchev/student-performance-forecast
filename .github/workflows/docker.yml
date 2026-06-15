@@ -48,8 +48,8 @@ jobs:
           tags: |
             ghcr.io/kirillbatishchev/student-performance-forecast:latest
             ghcr.io/kirillbatishchev/student-performance-forecast:${{ github.sha }}
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}:buildcache
-          cache-to: type=registry,ref=ghcr.io/${{ github.repository }}:buildcache,mode=max
+          cache-from: type=registry,ref=ghcr.io/kirillbatishchev/student-performance-forecast:buildcache
+          cache-to: type=registry,ref=ghcr.io/kirillbatishchev/student-performance-forecast:buildcache,mode=max
 
       - name: Update k8s manifest
         run: |
