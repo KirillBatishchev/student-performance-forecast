@@ -6,6 +6,7 @@ spec:
   selector:
     app: student-performance-forecast
   ports:
-    - port: 80
+    - name: http
+      port: 80
       targetPort: 8000
 
