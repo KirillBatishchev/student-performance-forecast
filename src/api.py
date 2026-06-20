@@ -7,13 +7,31 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks
 import sys
 import os
 import uuid
+import time
 import logging
 from datetime import datetime
 from typing import List
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
+from prometheus_client import Counter, Histogram, make_asgi_app
 
 sys.path.insert(0, os.path.dirname(__file__))
+
+# Метрики prometheus
+request_count = Counter(
+    "predictions_total",
+    "Всего предсказаний",
+    ["status"]
+)
+request_latency = Histogram(
+    "prediction_latency_seconds",
+    "Время инференса"
+)
+prediction_value = Histogram(
+    "prediction_value",
+    "Распределение предсказаний",
+    buckets=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+)
 
 # Загрузка секретов
 env_path = Path(__file__).resolve().parent.parent / "secrets" / ".env"
@@ -61,6 +79,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="MLOps API", lifespan=lifespan)
 
 # endpoints
+metrics_app = make_asgi_app()
+app.mount("/metrics", metrics_app)
 
 
 @app.get("/health")
@@ -74,8 +94,16 @@ async def predict_endpoint(request: PredictRequest):
     request_id = str(uuid.uuid4())[:8]
     logger.info(f"[{request_id}] Predict: {request.user_ids}")
 
+    start = time.time()
     try:
         results = predict(request.user_ids)
+        latency = time.time() - start
+        request_latency.observe(latency)
+        request_count.labels(status="success").inc()
+        for r in results:
+            if "prediction" in r:
+                prediction_value.observe(r["prediction"])
+
         return PredictResponse(
             status="success",
             request_id=request_id,
@@ -83,6 +111,7 @@ async def predict_endpoint(request: PredictRequest):
             timestamp=datetime.now().isoformat()
         )
     except Exception as e:
+        request_count.labels(status="error").inc()
         logger.error(f"[{request_id}] Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
