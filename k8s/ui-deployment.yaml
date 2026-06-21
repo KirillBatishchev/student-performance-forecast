@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: student-performance-ui
+  labels:
+    app: student-performance-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: student-performance-ui
+  template:
+    metadata:
+      labels:
+        app: student-performance-ui
+    spec:
+      containers:
+        - name: ui
+          image: ghcr.io/kirillbatishchev/student-performance-forecast-ui:latest
+          ports:
+            - containerPort: 8501
+          env:
+            - name: API_URL
+              value: "http://student-performance-forecast-service"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          readinessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: 8501
+            initialDelaySeconds: 10
+            periodSeconds: 5
