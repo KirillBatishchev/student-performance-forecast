@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: student-performance-ui-service
+  labels:
+    app: student-performance-ui
+spec:
+  selector:
+    app: student-performance-ui
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8501
+  

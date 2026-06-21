@@ -51,6 +51,16 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/kirillbatishchev/student-performance-forecast:buildcache
           cache-to: type=registry,ref=ghcr.io/kirillbatishchev/student-performance-forecast:buildcache,mode=max
 
+      - name: Build and push UI
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.ui
+          push: true
+          tags: |
+            ghcr.io/kirillbatishchev/student-performance-forecast-ui:latest
+            ghcr.io/kirillbatishchev/student-performance-forecast-ui:${{ github.sha }}
+
       - name: Update k8s manifest
         run: |
           sed -i \
