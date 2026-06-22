@@ -116,7 +116,46 @@ if page == "🔮 Инференс":
 # ─── Предсказания ─────────────────────────────────────────────
 elif page == "📋 Предсказания":
     st.subheader("📋 Последние предсказания")
-    st.info("История предсказаний будет доступна после подключения БД")
+
+    try:
+        response = requests.get(
+            f"{API_URL}/predictions/recent?limit=50",
+            timeout=10
+        )
+        if response.status_code == 200:
+            data = response.json()
+            predictions = data.get("predictions", [])
+
+            if predictions:
+                rows = []
+                for p in predictions:
+                    if "error" in p:
+                        rows.append({
+                            "User ID": p["user_id"],
+                            "Вероятность": "-",
+                            "Статус": "❌ Ошибка",
+                            "Аномалия": "",
+                            "Время": p.get("timestamp", "")
+                        })
+                    else:
+                        prob = p.get("prediction", 0)
+                        rows.append({
+                            "User ID": p["user_id"],
+                            "Вероятность": f"{prob:.1%}",
+                            "Статус": "🔴 Высокий риск ошибки" if prob < 0.3 else ("✅ Успех" if p.get("will_succeed") else "⚠️ Риск ошибки"),
+                            "Время": p.get("timestamp", "")
+                        })
+
+                import pandas as pd
+                df = pd.DataFrame(rows)
+                st.dataframe(df, use_container_width=True, hide_index=True)
+                st.caption(f"Показано {len(rows)} предсказаний")
+            else:
+                st.info("Предсказаний пока нет")
+        else:
+            st.error(f"Ошибка API: {response.status_code}")
+    except Exception as e:
+        st.error(f"Ошибка подключения: {e}")
 
 # ─── Эксперименты ─────────────────────────────────────────────
 elif page == "🧪 Эксперименты":

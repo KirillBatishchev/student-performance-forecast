@@ -9,6 +9,7 @@ import os
 import uuid
 import time
 import logging
+import src.data.storage as st
 from datetime import datetime
 from typing import List
 from contextlib import asynccontextmanager
@@ -86,6 +87,26 @@ app.mount("/metrics", metrics_app)
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/predictions/recent")
+async def recent_predictions(limit: int = 20):
+    """Последние предсказания из MinIO"""
+    try:
+        files = st.list_files("predictions/")
+        files = sorted(files, reverse=True)[:limit]
+
+        results = []
+        for f in files:
+            data = st.load_json(f)
+            for pred in data.get("predictions", []):
+                pred["timestamp"] = data.get("timestamp", "")
+                results.append(pred)
+
+        return {"predictions": results[:limit]}
+    except Exception as e:
+        logger.error(f"Error loading predictions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/predict", response_model=PredictResponse)
