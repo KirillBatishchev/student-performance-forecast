@@ -1,7 +1,7 @@
 import streamlit as st
 import requests
 
-API_URL = "http://130.49.153.56:8888"
+API_URL = "http://student-performance-forecast-service"
 
 st.set_page_config(
     page_title="Student Performance Forecast",
