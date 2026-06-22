@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
         - name: mlops-model
-          image: ghcr.io/kirillbatishchev/student-performance-forecast:e1409eb0e430f7232d692ed2e4cc58f42edf5e89
+          image: ghcr.io/kirillbatishchev/student-performance-forecast:a59a2414e27b2499fa3328d4bde0dc5a7b34b5b1
           ports:
             - containerPort: 8000
           env:
