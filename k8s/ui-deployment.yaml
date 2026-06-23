@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: ui
-          image: ghcr.io/kirillbatishchev/student-performance-forecast-ui:eae7098e42c983b62941e01946dcb07e7e3c29fe
+          image: ghcr.io/kirillbatishchev/student-performance-forecast-ui:eecfdd7eb7a21fe46fb7256969c2191815d28435
           ports:
             - containerPort: 8501
           env:
