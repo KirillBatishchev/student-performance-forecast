@@ -22,6 +22,7 @@ jobs:
           pip install pytest
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install pandas numpy minio python-dotenv
+          pip install fastapi httpx uvicorn mlflow prometheus-client
 
       - name: Run tests
         run: pytest tests/ -v
