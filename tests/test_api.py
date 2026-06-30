@@ -79,7 +79,7 @@ def test_predict_multiple_users(client):
 
 def test_retrain_returns_job_id(client):
     """Проверяем что /retrain возвращает job_id"""
-    response = client.post("/retrain")
+    response = client.post("/finetune")
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "started"
@@ -92,13 +92,11 @@ def test_storage_unseen_users():
     with patch("minio.Minio", return_value=MagicMock()):
         from src.data import storage
 
-        trained = {
-            "trained_users": {"u1", "u2"},
-            "valid_users": {"u3"},
-        }
-        all_users = ["u1", "u2", "u3", "u4", "u5"]
+        # Мокаем get_all_users()
+        storage.get_all_users = MagicMock(return_value=["u1", "u2", "u3", "u4", "u5"])
 
-        result = storage.unseen_users(trained, all_users)
+        trained = {"u1", "u2", "u3"}  # ← только set
+        result = storage.unseen_users(trained)
 
         assert isinstance(result, list)
         assert "u4" in result
