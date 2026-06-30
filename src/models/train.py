@@ -1,6 +1,7 @@
 import mlflow
 from pathlib import Path
 import os
+from datetime import datetime
 from dotenv import load_dotenv
 import json
 import random
@@ -24,6 +25,10 @@ os.environ["MLFLOW_S3_VERIFY_SSL"] = "false"
 
 
 def prepare_data(user_ids, params, correct_dict):
+    """
+    Преобразование данных из списка id в data_loader
+    """
+    
     sequences = []
 
     for user_id in user_ids:
@@ -71,6 +76,10 @@ def prepare_data(user_ids, params, correct_dict):
 
 
 def train_core(model, params, train_loader, valid_loader):
+    """
+    Ядро, которое одинаковое для обучения и дообучения
+    """
+    
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=params["training"]["lr"])
@@ -234,6 +243,10 @@ def train_core(model, params, train_loader, valid_loader):
 
 
 def freeze_for_finetune(model):
+    """
+    Заморозка параметров для дообучения
+    """
+    
     for param in model.parameters():
         param.requires_grad = False
 
@@ -244,8 +257,84 @@ def freeze_for_finetune(model):
         param.requires_grad = True
 
 
+def log_data_usage(mode: str, train_ids: list, valid_ids: list):
+    """
+    Добавить блок в файл логов
+    """
+    
+    current_time = datetime.now().isoformat()
+
+    new_entry = {
+        "timestamp": current_time,
+        "mode": mode,
+        "train_users": train_ids,
+        "valid_users": valid_ids
+    }
+    
+    try:
+        log_data = st.load_json("logs/training/history.json")
+    except:
+        log_data = {"history": []}
+    
+    # Добавляем новый блок в историю
+    log_data["history"].append(new_entry)
+    
+    # Сохраняем обратно
+    st.save_json(new_entry, "logs/training/latest.json")
+    st.save_json(log_data, "logs/training/history.json")
+    return current_time
+
+
+def get_used_users(timestamp = "") -> set:
+    """
+    Получить все ID пользователей, которые использовались до указанной временной метки
+    
+    Args:
+        timestamp: временная метка из MLflow (последнее обучение)
+    
+    Returns:
+        set: множество всех ID пользователей, использованных до этой даты
+    """
+    used_users = set()
+    if timestamp == "":
+        return used_users
+    
+    try:
+        # Загружаем историю обучения
+        log_data = st.load_json("logs/training/history.json")
+        history = log_data.get("history", [])
+        for entry in history:
+            entry_timestamp = entry.get("timestamp", "")
+            if entry_timestamp <= timestamp:
+                # Добавляем всех пользователей из этого блока
+                used_users.update(entry.get("train_users", []))
+                used_users.update(entry.get("valid_users", []))
+        
+        return used_users
+        
+    except Exception as e:
+        print(f"Error loading training history: {e}")
+        return set()
+
+
 def run_training(mode="train", model=None):
+    """
+    Запуск обучения/дообучения, которое включает в себя выбор файлов, 
+    которые ранее не были задействованы в обучении/дообучении; добавление 
+    новых файлов в список задействованных; обучение/дообучение мордели;
+    логирование метрик и трекинг модели
+    """
+    
+    
     mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", ""))
+    
+    experiment_name = "StudentPerformance"
+    experiment = mlflow.get_experiment_by_name(experiment_name)
+    if experiment is None:
+        experiment_id = mlflow.create_experiment(experiment_name)
+    else:
+        experiment_id = experiment.experiment_id
+    
     questions_df = st.load_csv("raw/contents/questions.csv")
     correct_dict = dict(
         zip(questions_df["question_id"], questions_df["correct_answer"])
@@ -253,6 +342,8 @@ def run_training(mode="train", model=None):
 
     initial = st.initial_model()
     params = initial["parameters"]
+    
+    # Создание модели с загрузкой весов и пустого списка использованных данных
     if mode == "train":
         model = Model.SimpleDKT(
             len(params["data"]["feature_cols"]),
@@ -262,48 +353,47 @@ def run_training(mode="train", model=None):
             params["architecture"]["dropout"],
         )
         model.load_state_dict(initial["weights"])
-    else:
+        unseen = list(st.get_all_users())
+    
+    # Загрузка модели, загрузка соответствующей временной метки,
+    # загрузка использованных данных по этой временной метке и выбор
+    # не использованных данных
+    else:  # finetune
         client = mlflow.tracking.MlflowClient()
 
-        runs = client.search_runs(
-            experiment_ids=["0"],
-            order_by=["start_time DESC"],
-            max_results=1
-        )
+        # Получаем последнюю версию модели из Registry
+        versions = client.get_latest_versions("SimpleDKT")
+        if not versions:
+            raise Exception("No model versions found in Registry")
 
-        if not runs:
-            raise Exception("No runs found for finetune")
+        latest_version = versions[0]
+        model_version = latest_version.version
+        run_id = latest_version.run_id
 
-        latest_run = runs[0]
-        run_id = latest_run.info.run_id
+        # Загружаем модель из Model Registry
+        model = mlflow.pytorch.load_model(f"models:/SimpleDKT/{model_version}")
 
-        # Загружаем модель из артефактов run
-        model = mlflow.pytorch.load_model(f"runs:/{run_id}/model")
+        # Получаем временную метку
+        run_data = client.get_run(run_id)
+        last_timestamp = run_data.data.params.get("data_timestamp", "1970-01-01T00:00:00")
 
-    all_users = st.get_all_users()
-    seen_users = st.load_json("raw/trained_users.json")
-    unseen = st.unseen_users(seen_users, all_users)
+        seen_users = get_used_users(last_timestamp)
+        unseen = st.unseen_users(seen_users)
 
     if len(unseen) == 0:
         return {"status": "skipped", "message": "Нет новых пользователей"}
 
-    sample_users = random.sample(unseen, min(50, len(unseen)))
+    # Создание выборки данных для обучения/дообучения
+    sample_users = random.sample(unseen, min(25, len(unseen)))
     train_loader, valid_loader, train_ids, valid_ids = prepare_data(
         sample_users, params, correct_dict
     )
 
-    seen_users["trained_users"] = list(
-        set(seen_users["trained_users"]) | set(train_ids)
-    )
-    seen_users["valid_users"] = list(
-        set(seen_users["valid_users"]) | set(valid_ids)
-    )
-    st.save_json(seen_users, "raw/trained_users.json")
-
     if mode == "finetune":
         freeze_for_finetune(model)
+        
 
-    with mlflow.start_run(run_name=mode):
+    with mlflow.start_run(experiment_id=experiment_id, run_name=mode):
         mlflow.log_params({
             "input_dim": params["architecture"]["input_dim"],
             "hidden_dim": params["architecture"]["hidden_dim"],
@@ -319,7 +409,7 @@ def run_training(mode="train", model=None):
 
             "max_len": params["data"]["max_len"],
         })
-
+               
         mlflow.log_param(
             "feature_cols", json.dumps(
                 params["data"]["feature_cols"]))
@@ -332,6 +422,7 @@ def run_training(mode="train", model=None):
 
         model = train_core(model, params, train_loader, valid_loader)
 
+
         if mode == "train":
             mlflow.pytorch.log_model(
                 pytorch_model=model,
@@ -341,11 +432,14 @@ def run_training(mode="train", model=None):
         elif mode == "finetune":
             run_id = mlflow.active_run().info.run_id
 
-            client.create_model_version(
-                name="SimpleDKT",
-                source=f"runs:/{run_id}/model",
-                run_id=run_id,
+            mlflow.pytorch.log_model(
+                pytorch_model=model,
+                artifact_path="model",
+                registered_model_name="SimpleDKT"
             )
+            
+        timestamp = log_data_usage(mode, train_ids, valid_ids) 
+        mlflow.log_param("data_timestamp", timestamp)
 
     return model
 
