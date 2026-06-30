@@ -16,6 +16,7 @@ from typing import List
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from prometheus_client import Counter, Histogram, Gauge, make_asgi_app
+from starlette.concurrency import run_in_threadpool
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -162,10 +163,10 @@ async def predict_endpoint(request: PredictRequest):
     # Определяем режим
     if request.random_count:
         logger.info(f"[{request_id}] Predict random: {request.random_count} users")
-        results = predict_random_users(request.random_count)
+        results = await run_in_threadpool(predict_random_users, request.random_count)
     elif request.user_ids:
         logger.info(f"[{request_id}] Predict: {request.user_ids}")
-        results = predict(request.user_ids)
+        results = await run_in_threadpool(predict, request.user_ids)
     else:
         raise HTTPException(status_code=400, detail="Укажите user_ids или random_count")
 
@@ -265,21 +266,22 @@ async def get_drift_report_text():
 @app.get("/experiments")
 async def get_experiments():
     """Список экспериментов из MLflow"""
-    try:
+    def _fetch():
         from mlflow.tracking import MlflowClient
         client = MlflowClient()
         experiments = client.search_experiments()
-        return {
-            "experiments": [
-                {
-                    "name": exp.name,
-                    "id": exp.experiment_id,
-                    "status": exp.lifecycle_stage,
-                    "runs": len(client.search_runs(experiment_ids=[str(exp.experiment_id)]))
-                }
-                for exp in experiments
-            ]
-        }
+        return [
+            {
+                "name": exp.name,
+                "id": exp.experiment_id,
+                "status": exp.lifecycle_stage,
+                "runs": len(client.search_runs(experiment_ids=[str(exp.experiment_id)]))
+            }
+            for exp in experiments
+        ]
+    try:
+        result = await run_in_threadpool(_fetch)
+        return {"experiments": result}
     except Exception as e:
         logger.error(f"Error loading experiments: {e}")
         return {"experiments": []}
@@ -288,20 +290,16 @@ async def get_experiments():
 @app.get("/model/metrics")
 async def get_model_metrics():
     """Метрики по версиям моделей из MLflow"""
-    try:
+    def _fetch():
         from mlflow.tracking import MlflowClient
         client = MlflowClient()
-
-        # Получаем все версии модели SimpleDKT
         versions = client.search_model_versions("name='SimpleDKT'")
-
         result = []
         for v in versions:
             try:
                 run = client.get_run(v.run_id)
                 metrics = run.data.metrics
 
-                # Пробуем разные названия метрик
                 accuracy = metrics.get("val_acc")
                 if accuracy is None:
                     accuracy = metrics.get("accuracy", 0)
@@ -310,16 +308,14 @@ async def get_model_metrics():
                 if loss is None:
                     loss = metrics.get("loss", 0)
 
-                # Преобразуем timestamp в строку
                 timestamp = run.info.start_time
                 if timestamp:
-                    from datetime import datetime
                     timestamp_str = datetime.fromtimestamp(timestamp / 1000).isoformat()
                 else:
                     timestamp_str = ""
 
                 result.append({
-                    "version": str(v.version),  # ← явно в строку
+                    "version": str(v.version),
                     "accuracy": float(accuracy) if accuracy else 0,
                     "loss": float(loss) if loss else 0,
                     "timestamp": timestamp_str
@@ -327,12 +323,11 @@ async def get_model_metrics():
             except Exception as e:
                 print(f"Error processing version {v.version}: {e}")
                 continue
+        return sorted(result, key=lambda x: int(x["version"]))
 
-        # Сортируем по версии
-        result = sorted(result, key=lambda x: int(x["version"]))
-
+    try:
+        result = await run_in_threadpool(_fetch)
         return {"versions": result}
-
     except Exception as e:
         logger.error(f"Error loading model metrics: {e}")
         return {"versions": []}
@@ -341,7 +336,7 @@ async def get_model_metrics():
 @app.get("/model/version")
 async def get_model_version():
     """Получить текущую версию модели"""
-    try:
+    def _fetch():
         from mlflow.tracking import MlflowClient
         client = MlflowClient()
         versions = client.get_latest_versions("SimpleDKT")
@@ -352,6 +347,9 @@ async def get_model_version():
                 "status": versions[0].status
             }
         return {"version": "unknown"}
+
+    try:
+        return await run_in_threadpool(_fetch)
     except Exception as e:
         logger.error(f"Error loading model version: {e}")
         return {"version": "error"}
