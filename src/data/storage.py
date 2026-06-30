@@ -20,12 +20,16 @@ client = Minio(
 BUCKET = os.getenv("MINIO_BUCKET")
 
 # Списки
+
+
 def list_files(prefix: str = "") -> list:
     """Список всех файлов в бакете по префиксу"""
     objects = client.list_objects(BUCKET, prefix=prefix, recursive=True)
     return [obj.object_name for obj in objects]
 
 # Возвращает индексы всех файлов пользователей
+
+
 def get_all_users() -> list:
     """Все user_id из raw/users_logs"""
     files = list_files("raw/users_logs")
@@ -36,11 +40,13 @@ def get_all_users() -> list:
     ]
 
 # Возвращает индексы файлов, которые не использовались в обучении ранее
+
+
 def unseen_users(trained_users_file: set) -> list:
     all_users = set(get_all_users())
     if trained_users_file is None:
         return list(all_users)
-    
+
     unseen = list(all_users - trained_users_file)
     return unseen
 
@@ -91,7 +97,8 @@ def save_json(data: dict, path: str):
     client.put_object(
         BUCKET, path, data=BytesIO(json_bytes), length=len(json_bytes)
     )
-    
+
+
 def save_text(text: str, path: str):
     """Сохранить текст в MinIO"""
     text_bytes = text.encode("utf-8")
@@ -100,6 +107,8 @@ def save_text(text: str, path: str):
     )
 
 # Удаление
+
+
 def delete_file(path: str):
     """Удалить файл из MinIO"""
     try:
@@ -108,7 +117,7 @@ def delete_file(path: str):
     except Exception as e:
         print(f"Ошибка удаления {path}: {e}")
         return False
-    
+
 
 def get_mlflow_client():
     """Получить клиент для бакета mlflow"""
@@ -121,6 +130,7 @@ def get_mlflow_client():
 
 
 MLFLOW_BUCKET = "mlflow"
+
 
 def list_files_mlflow(prefix: str = ""):
     """Список файлов в бакете mlflow"""
@@ -138,4 +148,3 @@ def delete_file_mlflow(path: str):
     except Exception as e:
         print(f"Ошибка удаления {path}: {e}")
         return False
-    
