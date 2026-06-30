@@ -88,6 +88,7 @@ def train_core(model, params, train_loader, valid_loader):
         base_lr=params["training"]["lr"],
         max_lr=params["training"]["max_lr"],
         step_size_up=params["training"]["lr_step"],
+        cycle_momentum=False
     )
     criterion = nn.BCELoss()
 
