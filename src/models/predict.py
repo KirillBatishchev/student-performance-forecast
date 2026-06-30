@@ -25,34 +25,35 @@ os.environ["MLFLOW_S3_IGNORE_TLS"] = os.getenv("MLFLOW_S3_IGNORE_TLS", "true")
 
 mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", ""))
 
+
 def update_windows(record):
     """
     Обновить скользящие окна (in-place)
     """
     window_sizes = [10, 100, 500, 1000]
-    
+
     feature_vector = record["features"]
-    
+
     window_record = {
         "user_id": record["user_id"],
         "features": feature_vector,
         "prediction": record["prediction"],
         "timestamp": record["timestamp"]
     }
-    
+
     for size in window_sizes:
         window_path = f"logs/windows/last_{size}.json"
-        
+
         try:
             window = st.load_json(window_path)
-        except:
+        except BaseException:
             window = {"size": size, "data": [], "last_update": None}
-        
+
         window["data"].append(window_record)
         if len(window["data"]) > size:
             window["data"] = window["data"][-size:]
         window["last_update"] = datetime.now().isoformat()
-        
+
         try:
             st.save_json(window, window_path)
         except Exception as e:
@@ -62,7 +63,7 @@ def update_windows(record):
 def save_prediction_log(user_id, features, prediction, model_version):
     """
     Сохранить лог предсказания для детекции дрифта
-    """   
+    """
     record = {
         "user_id": user_id,
         "timestamp": datetime.now().isoformat(),
@@ -79,7 +80,7 @@ def save_prediction_log(user_id, features, prediction, model_version):
         print(f"Ошибка сохранения лога: {e}")
 
     update_windows(record)
-    
+
     return record
 
 
@@ -91,7 +92,7 @@ def get_model_version():
         versions = client.get_latest_versions("SimpleDKT")
         if versions:
             return versions[0].version
-    except:
+    except BaseException:
         pass
     return "unknown"
 
@@ -121,10 +122,10 @@ def load_model():
 def predict_random_users(count: int = 10):
     """Предсказание для определенного количества случайных пользователей"""
     all_users = st.get_all_users()
-    
+
     if len(all_users) < count:
         count = len(all_users)
-    
+
     random_users = random.sample(all_users, count)
     return predict(random_users)
 
@@ -132,12 +133,12 @@ def predict_random_users(count: int = 10):
 def predict(user_ids):
     """Прогноз для списка пользователей"""
     print(f"\nПрогноз для {len(user_ids)} пользователей")
-    
+
     # 1. Загрузка данных
     params = st.initial_model()["parameters"]
     correct_dict = bs.Transform_questions_dict(st.load_csv("raw/contents/questions.csv"))
     model = load_model()
-    
+
     # 2. Получаем версию модели
     model_version = get_model_version()
 
@@ -154,7 +155,7 @@ def predict(user_ids):
             df = bs.Transformation_data(st.load_csv(f"raw/users_logs/{user_id}.csv"), correct_dict)
             if df.empty:
                 raise ValueError("Нет данных")
-            
+
             # Нормализация
             df[feature_cols] = (df[feature_cols] - means) / stds
 
@@ -176,10 +177,10 @@ def predict(user_ids):
                 "will_succeed": pred > 0.5
             }
             results.append(result)
-            
+
             status = 'успех' if pred > 0.5 else 'риск'
             print(f"  {user_id}: {pred:.3f} - {status}")
-            
+
             # --- СОХРАНЯЕМ ЛОГ ДЛЯ ДРИФТА ---
             save_prediction_log(user_id, features, pred, model_version)
 
@@ -194,19 +195,19 @@ def predict(user_ids):
         "total": len(results),
         "predictions": results
     }
-    
+
     try:
         st.save_json(output, f"logs/predictions/{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
         st.save_json(output, "logs/predictions/latest.json")
     except Exception as e:
         print(f"Ошибка сохранения результатов: {e}")
-        
+
     try:
         window = st.load_json("logs/windows/last_100.json")
         if len(window.get("data", [])) >= 100:
-            
+
             check_drift(window_size=100)
-            
+
     except Exception as e:
         print(f"  Ошибка при проверке данных: {e}")
 

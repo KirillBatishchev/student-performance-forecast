@@ -1,3 +1,7 @@
+from dotenv import load_dotenv
+import data.storage as st
+from mlflow.tracking import MlflowClient
+import mlflow
 import sys
 import os
 import argparse
@@ -7,15 +11,11 @@ import time
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-import mlflow
-from mlflow.tracking import MlflowClient
-import data.storage as st
-from dotenv import load_dotenv
 
 env_path = Path(__file__).resolve().parent.parent.parent / "secrets" / ".env"
 if env_path.exists():
     load_dotenv(env_path)
-    
+
 os.environ["MLFLOW_S3_ENDPOINT_URL"] = os.getenv("MLFLOW_S3_ENDPOINT_URL", "")
 # os.environ["MLFLOW_S3_ENDPOINT_URL"] = "http://130.49.153.56:9000"
 os.environ["AWS_ACCESS_KEY_ID"] = os.getenv("MINIO_ROOT_USER", "")
@@ -174,6 +174,7 @@ def clean_all():
     clean_experiment_runs()
     reset_logs()
 
+
 def main():
     parser = argparse.ArgumentParser(description="Очистка системы")
     parser.add_argument("--all", action="store_true", help="Очистить всё (модели + логи)")
@@ -210,5 +211,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-

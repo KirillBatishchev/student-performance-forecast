@@ -28,7 +28,7 @@ def prepare_data(user_ids, params, correct_dict):
     """
     Преобразование данных из списка id в data_loader
     """
-    
+
     sequences = []
 
     for user_id in user_ids:
@@ -79,7 +79,7 @@ def train_core(model, params, train_loader, valid_loader):
     """
     Ядро, которое одинаковое для обучения и дообучения
     """
-    
+
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=params["training"]["lr"])
@@ -246,7 +246,7 @@ def freeze_for_finetune(model):
     """
     Заморозка параметров для дообучения
     """
-    
+
     for param in model.parameters():
         param.requires_grad = False
 
@@ -261,7 +261,7 @@ def log_data_usage(mode: str, train_ids: list, valid_ids: list):
     """
     Добавить блок в файл логов
     """
-    
+
     current_time = datetime.now().isoformat()
 
     new_entry = {
@@ -270,35 +270,35 @@ def log_data_usage(mode: str, train_ids: list, valid_ids: list):
         "train_users": train_ids,
         "valid_users": valid_ids
     }
-    
+
     try:
         log_data = st.load_json("logs/training/history.json")
-    except:
+    except BaseException:
         log_data = {"history": []}
-    
+
     # Добавляем новый блок в историю
     log_data["history"].append(new_entry)
-    
+
     # Сохраняем обратно
     st.save_json(new_entry, "logs/training/latest.json")
     st.save_json(log_data, "logs/training/history.json")
     return current_time
 
 
-def get_used_users(timestamp = "") -> set:
+def get_used_users(timestamp="") -> set:
     """
     Получить все ID пользователей, которые использовались до указанной временной метки
-    
+
     Args:
         timestamp: временная метка из MLflow (последнее обучение)
-    
+
     Returns:
         set: множество всех ID пользователей, использованных до этой даты
     """
     used_users = set()
     if timestamp == "":
         return used_users
-    
+
     try:
         # Загружаем историю обучения
         log_data = st.load_json("logs/training/history.json")
@@ -309,9 +309,9 @@ def get_used_users(timestamp = "") -> set:
                 # Добавляем всех пользователей из этого блока
                 used_users.update(entry.get("train_users", []))
                 used_users.update(entry.get("valid_users", []))
-        
+
         return used_users
-        
+
     except Exception as e:
         print(f"Error loading training history: {e}")
         return set()
@@ -319,22 +319,21 @@ def get_used_users(timestamp = "") -> set:
 
 def run_training(mode="train", model=None):
     """
-    Запуск обучения/дообучения, которое включает в себя выбор файлов, 
-    которые ранее не были задействованы в обучении/дообучении; добавление 
+    Запуск обучения/дообучения, которое включает в себя выбор файлов,
+    которые ранее не были задействованы в обучении/дообучении; добавление
     новых файлов в список задействованных; обучение/дообучение мордели;
     логирование метрик и трекинг модели
     """
-    
-    
+
     mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", ""))
-    
+
     experiment_name = "StudentPerformance"
     experiment = mlflow.get_experiment_by_name(experiment_name)
     if experiment is None:
         experiment_id = mlflow.create_experiment(experiment_name)
     else:
         experiment_id = experiment.experiment_id
-    
+
     questions_df = st.load_csv("raw/contents/questions.csv")
     correct_dict = dict(
         zip(questions_df["question_id"], questions_df["correct_answer"])
@@ -342,7 +341,7 @@ def run_training(mode="train", model=None):
 
     initial = st.initial_model()
     params = initial["parameters"]
-    
+
     # Создание модели с загрузкой весов и пустого списка использованных данных
     if mode == "train":
         model = Model.SimpleDKT(
@@ -354,7 +353,7 @@ def run_training(mode="train", model=None):
         )
         model.load_state_dict(initial["weights"])
         unseen = list(st.get_all_users())
-    
+
     # Загрузка модели, загрузка соответствующей временной метки,
     # загрузка использованных данных по этой временной метке и выбор
     # не использованных данных
@@ -391,7 +390,6 @@ def run_training(mode="train", model=None):
 
     if mode == "finetune":
         freeze_for_finetune(model)
-        
 
     with mlflow.start_run(experiment_id=experiment_id, run_name=mode):
         mlflow.log_params({
@@ -409,7 +407,7 @@ def run_training(mode="train", model=None):
 
             "max_len": params["data"]["max_len"],
         })
-               
+
         mlflow.log_param(
             "feature_cols", json.dumps(
                 params["data"]["feature_cols"]))
@@ -421,7 +419,6 @@ def run_training(mode="train", model=None):
                 params["normalization"]["stds"]))
 
         model = train_core(model, params, train_loader, valid_loader)
-
 
         if mode == "train":
             mlflow.pytorch.log_model(
@@ -437,8 +434,8 @@ def run_training(mode="train", model=None):
                 artifact_path="model",
                 registered_model_name="SimpleDKT"
             )
-            
-        timestamp = log_data_usage(mode, train_ids, valid_ids) 
+
+        timestamp = log_data_usage(mode, train_ids, valid_ids)
         mlflow.log_param("data_timestamp", timestamp)
 
     return model

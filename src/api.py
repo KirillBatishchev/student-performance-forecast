@@ -107,15 +107,15 @@ async def recent_predictions(limit: int = 20):
     except Exception as e:
         logger.error(f"Error loading predictions: {e}")
         return {"predictions": []}
-    
-    
+
+
 @app.get("/predictions/history")
 async def get_predictions_history(limit: int = 50):
     """Получить предсказания из всех файлов logs/predictions/"""
     try:
         # Получаем все файлы в logs/predictions/
         files = st.list_files("logs/predictions/")
-        
+
         # Фильтруем только файлы с предсказаниями (не latest.json и не папки)
         prediction_files = [
             f for f in files
@@ -123,10 +123,10 @@ async def get_predictions_history(limit: int = 50):
             and "latest" not in f
             and "raw" not in f
         ]
-        
+
         # Сортируем по времени (новые сверху)
         prediction_files = sorted(prediction_files, reverse=True)[:limit]
-        
+
         all_predictions = []
         for file_path in prediction_files:
             try:
@@ -134,7 +134,7 @@ async def get_predictions_history(limit: int = 50):
                 predictions = data.get("predictions", [])
                 timestamp = data.get("timestamp", "")
                 model_version = data.get("model_version", "unknown")
-                
+
                 for pred in predictions:
                     pred["timestamp"] = timestamp
                     pred["model_version"] = model_version
@@ -143,12 +143,12 @@ async def get_predictions_history(limit: int = 50):
             except Exception as e:
                 print(f"Error: {e}")
                 continue
-        
+
         # Ограничиваем общее количество
         all_predictions = all_predictions[:limit]
-        
+
         return {"predictions": all_predictions, "total": len(all_predictions)}
-        
+
     except Exception as e:
         logger.error(f"Error loading predictions history: {e}")
         return {"predictions": [], "total": 0}
@@ -158,7 +158,7 @@ async def get_predictions_history(limit: int = 50):
 async def predict_endpoint(request: PredictRequest):
     """Предсказание для списка пользователей или случайных"""
     request_id = str(uuid.uuid4())[:8]
-    
+
     # Определяем режим
     if request.random_count:
         logger.info(f"[{request_id}] Predict random: {request.random_count} users")
@@ -168,7 +168,7 @@ async def predict_endpoint(request: PredictRequest):
         results = predict(request.user_ids)
     else:
         raise HTTPException(status_code=400, detail="Укажите user_ids или random_count")
-    
+
     start = time.time()
     try:
         latency = time.time() - start
@@ -211,6 +211,7 @@ async def finetune_endpoint(background_tasks: BackgroundTasks):
         message="Finetune started"
     )
 
+
 @app.post("/check_drift")
 async def check_drift_endpoint(window_size: int = 100):
     """Запуск проверки дрифта с выбором размера окна"""
@@ -219,9 +220,9 @@ async def check_drift_endpoint(window_size: int = 100):
         valid_sizes = [10, 100, 500, 1000]
         if window_size not in valid_sizes:
             window_size = 100
-        
+
         report = check_drift(window_size=window_size)
-        
+
         if report:
             # Обновляем метрики Prometheus
             status_map = {"stable": 0, "warning": 1, "drift": 2}
@@ -233,7 +234,8 @@ async def check_drift_endpoint(window_size: int = 100):
     except Exception as e:
         logger.error(f"Drift check failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-    
+
+
 @app.get("/drift/status")
 async def get_drift_status():
     """Получить последний статус дрифта"""
@@ -281,33 +283,33 @@ async def get_experiments():
     except Exception as e:
         logger.error(f"Error loading experiments: {e}")
         return {"experiments": []}
-    
-    
+
+
 @app.get("/model/metrics")
 async def get_model_metrics():
     """Метрики по версиям моделей из MLflow"""
     try:
         from mlflow.tracking import MlflowClient
         client = MlflowClient()
-        
+
         # Получаем все версии модели SimpleDKT
         versions = client.search_model_versions("name='SimpleDKT'")
-        
+
         result = []
         for v in versions:
             try:
                 run = client.get_run(v.run_id)
                 metrics = run.data.metrics
-                
+
                 # Пробуем разные названия метрик
                 accuracy = metrics.get("val_acc")
                 if accuracy is None:
                     accuracy = metrics.get("accuracy", 0)
-                
+
                 loss = metrics.get("val_loss")
                 if loss is None:
                     loss = metrics.get("loss", 0)
-                
+
                 # Преобразуем timestamp в строку
                 timestamp = run.info.start_time
                 if timestamp:
@@ -315,7 +317,7 @@ async def get_model_metrics():
                     timestamp_str = datetime.fromtimestamp(timestamp / 1000).isoformat()
                 else:
                     timestamp_str = ""
-                
+
                 result.append({
                     "version": str(v.version),  # ← явно в строку
                     "accuracy": float(accuracy) if accuracy else 0,
@@ -325,16 +327,16 @@ async def get_model_metrics():
             except Exception as e:
                 print(f"Error processing version {v.version}: {e}")
                 continue
-        
+
         # Сортируем по версии
         result = sorted(result, key=lambda x: int(x["version"]))
-        
+
         return {"versions": result}
-        
+
     except Exception as e:
         logger.error(f"Error loading model metrics: {e}")
         return {"versions": []}
-    
+
 
 @app.get("/model/version")
 async def get_model_version():
@@ -353,7 +355,7 @@ async def get_model_version():
     except Exception as e:
         logger.error(f"Error loading model version: {e}")
         return {"version": "error"}
-    
+
 
 @app.post("/train")
 async def train_endpoint():
@@ -372,7 +374,7 @@ async def get_predictions_stats():
     try:
         # Получаем все файлы в logs/predictions/
         files = st.list_files("logs/predictions/")
-        
+
         # Фильтруем только файлы с предсказаниями (не latest.json и не папки)
         prediction_files = [
             f for f in files
@@ -380,7 +382,7 @@ async def get_predictions_stats():
             and "latest" not in f
             and "raw" not in f
         ]
-        
+
         all_predictions = []
         for file_path in prediction_files:
             try:
@@ -395,7 +397,7 @@ async def get_predictions_stats():
         success_count = sum(1 for p in all_predictions if p.get("will_succeed", False))
         failure_count = total - success_count
         avg_confidence = sum(p.get("prediction", 0) for p in all_predictions) / total if total > 0 else 0
-        
+
         return {
             "total": total,
             "success_count": success_count,
@@ -414,7 +416,7 @@ async def get_data_info():
         # Всего пользователей
         all_users = st.get_all_users()
         total_users = len(all_users)
-        
+
         # Новые пользователи (не использованные в обучении)
         try:
             history = st.load_json("logs/training/history.json")
@@ -426,7 +428,7 @@ async def get_data_info():
         except Exception as e:
             print(f"Error: {e}")
             new_users = 0
-        
+
         # Всего предсказаний
         try:
             latest = st.load_json("logs/predictions/latest.json")
@@ -434,7 +436,7 @@ async def get_data_info():
         except Exception as e:
             print(f"Error: {e}")
             total_predictions = 0
-        
+
         return {
             "total_users": total_users,
             "new_users": new_users,

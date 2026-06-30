@@ -3,7 +3,7 @@ import plotly.express as px
 import requests
 
 API_URL = "http://student-performance-forecast-service"
-#API_URL = "http://localhost:8000"
+# API_URL = "http://localhost:8000"
 
 st.set_page_config(
     page_title="Student Performance Forecast",
@@ -105,7 +105,8 @@ if page == "Предсказание":
                                     c2.metric("Вероятность", f"{prob:.1%}")
                                     c3.progress(prob)
                                     if pred["will_succeed"]:
-                                        c4.markdown('<span class="success-badge">✅ Успех</span>', unsafe_allow_html=True)
+                                        c4.markdown(
+                                            '<span class="success-badge">✅ Успех</span>', unsafe_allow_html=True)
                                     else:
                                         c4.markdown('<span class="risk-badge">⚠️ Риск</span>', unsafe_allow_html=True)
                     else:
@@ -118,7 +119,7 @@ if page == "Предсказание":
 # ─── Предсказания ─────────────────────────────────────────────
 elif page == "История предсказаний":
     st.subheader("История предсказаний")
-    
+
     # --- МЕТРИКИ ПРЕДСКАЗАНИЙ ---
     try:
         response = requests.get(f"{API_URL}/predictions/stats", timeout=10)
@@ -131,9 +132,9 @@ elif page == "История предсказаний":
             col4.metric("Средняя уверенность", f"{data.get('avg_confidence', 0):.1%}")
         else:
             st.warning("Статистика предсказаний недоступна")
-    except:
+    except BaseException:
         pass
-    
+
     st.divider()
 
     # Фильтры
@@ -269,18 +270,18 @@ elif page == "Эксперименты":
             st.error(f"Ошибка загрузки экспериментов: {response.status_code}")
     except Exception as e:
         st.error(f"Ошибка подключения: {e}")
-        
+
     st.divider()
-    
+
     # --- СРАВНЕНИЕ ВЕРСИЙ МОДЕЛЕЙ ---
     st.subheader("Сравнение версий моделей")
-    
+
     try:
         response = requests.get(f"{API_URL}/model/metrics", timeout=30)
         if response.status_code == 200:
             data = response.json()
             versions = data.get("versions", [])
-            
+
             if versions:
                 rows = []
                 for v in versions:
@@ -290,18 +291,18 @@ elif page == "Эксперименты":
                         "Loss": f"{v.get('loss', 0):.3f}",
                         "Дата": v.get("timestamp", "N/A")[:19] if v.get("timestamp") else "N/A"
                     })
-                
+
                 import pandas as pd
                 df = pd.DataFrame(rows)
                 st.dataframe(df, use_container_width=True, hide_index=True)
                 st.caption(f"Всего версий: {len(rows)}")
-                
+
                 # График сравнения Accuracy
                 try:
                     df_plot = pd.DataFrame(rows)
                     df_plot["Версия"] = df_plot["Версия"].astype(str)
                     df_plot["Accuracy"] = df_plot["Accuracy"].astype(float)
-                    
+
                     fig = px.line(
                         df_plot,
                         x="Версия",
@@ -312,19 +313,20 @@ elif page == "Эксперименты":
                     st.plotly_chart(fig, use_container_width=True)
                 except Exception as e:
                     st.caption(f"График недоступен: {e}")
-                
+
                 # Текущая версия
                 if versions:
                     latest = versions[-1]
-                    st.success(f"Текущая версия: **{latest.get('version', 'N/A')}** (Accuracy: {latest.get('accuracy', 0):.3f})")
-                    
+                    st.success(
+                        f"Текущая версия: **{latest.get('version', 'N/A')}** (Accuracy: {latest.get('accuracy', 0):.3f})")
+
             else:
                 st.info("Нет данных о метриках моделей")
         else:
             st.warning("Метрики моделей недоступны")
     except Exception as e:
         st.warning(f"Метрики моделей недоступны: {e}")
-        
+
 # ─── Дрейф ────────────────────────────────────────────────────
 elif page == "Дрейф данных":
     st.subheader("Мониторинг дрейфа и версия модели")
@@ -338,7 +340,7 @@ elif page == "Дрейф данных":
             response = requests.get(f"{API_URL}/model/version", timeout=5)
             if response.status_code == 200:
                 return response.json().get("version", "unknown")
-        except:
+        except BaseException:
             pass
         return "unknown"
 
@@ -348,7 +350,7 @@ elif page == "Дрейф данных":
             response = requests.get(f"{API_URL}/data/info", timeout=5)
             if response.status_code == 200:
                 return response.json()
-        except:
+        except BaseException:
             pass
         return {"total_users": 0, "new_users": 0, "total_predictions": 0}
 
@@ -358,14 +360,14 @@ elif page == "Дрейф данных":
             response = requests.get(f"{API_URL}/drift/status", timeout=5)
             if response.status_code == 200:
                 return response.json()
-        except:
+        except BaseException:
             pass
         return {"status": "no_data", "max_psi": 0}
 
     # ============================================
     # ОТОБРАЖЕНИЕ
     # ============================================
-    
+
     # Версия модели
     model_version = get_cached_model_version()
     if model_version and model_version != "unknown":
@@ -378,7 +380,7 @@ elif page == "Дрейф данных":
     # Информация о данных
     st.subheader("Информация о данных")
     data_info = get_cached_data_info()
-    
+
     if data_info.get("total_users", 0) > 0:
         col1, col2, col3 = st.columns(3)
         col1.metric("Всего пользователей", data_info.get("total_users", 0))
@@ -471,8 +473,7 @@ elif page == "Дрейф данных":
                             "Concept Drift",
                             f"{concept_emoji} {concept_status}",
                             delta=f"{current_acc:.3f} vs {ref_acc:.3f}" if concept_status != "no_data" else "нет данных",
-                            help="Изменение точности модели"
-                        )
+                            help="Изменение точности модели")
 
                     # --- ДЕТАЛЬНЫЙ ОТЧЁТ ПО ПРИЗНАКАМ ---
                     st.divider()
@@ -514,7 +515,8 @@ elif page == "Дрейф данных":
                         # Предупреждение о критических признаках
                         if drift_count > 0:
                             critical_features = [r["Признак"] for r in rows if "drift" in r["Статус"]]
-                            st.warning(f"⚠️ **{drift_count}** признаков с обнаруженным дрифтом: {', '.join(critical_features)}")
+                            st.warning(
+                                f"⚠️ **{drift_count}** признаков с обнаруженным дрифтом: {', '.join(critical_features)}")
                     else:
                         st.info("Нет данных о признаках")
 
